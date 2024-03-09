@@ -1,0 +1,44 @@
+{{ reserveImport "bytes" }}
+{{ reserveImport "context" }}
+{{ reserveImport "encoding/json" }}
+{{ reserveImport "fmt" }}
+{{ reserveImport "io" }}
+{{ reserveImport "net/http" }}
+{{ reserveImport "net/url" }}
+{{ reserveImport "path" }}
+{{ reserveImport "time" }}
+
+{{ reserveImport "github.com/nautilus/graphql" "nautilusGraphql" }}
+
+type QueryInput = nautilusGraphql.QueryInput
+type NetworkMiddleware = nautilusGraphql.NetworkMiddleware
+{{- if .InterfaceName }}
+    type {{ .InterfaceName }} interface {
+        {{- range $query := .Queries }}
+            {{ $query.Name | go }} (context.Context, *QueryInput) ({{ $query.Type | ref }}, error)
+        {{- end }}
+    }
+{{- end }}
+
+type Client struct {
+	querier nautilusGraphql.Queryer
+}
+
+func NewClient(url string, client *http.Client, mwares ...NetworkMiddleware) {{- if .InterfaceName }} {{ .InterfaceName }} {{- else }} *Client {{- end }} {
+	return &Client{
+		nautilusGraphql.NewSingleRequestQueryer(url).WithHTTPClient(client).(*nautilusGraphql.SingleRequestQueryer).WithMiddlewares(mwares),
+	}
+}
+
+{{- range $query := .Queries }}
+
+    func (c *Client) {{ $query.Name | go }} (ctx context.Context, queryInput *QueryInput) ({{ $query.Type | ref }}, error) {
+        var res struct {
+            {{ $query.Name | go }} {{ $query.Type | ref }}
+        }
+        err := c.querier.Query(ctx, queryInput, &res)
+        return res.{{ $query.Name | go }}, err 
+
+    }
+
+{{- end}}
