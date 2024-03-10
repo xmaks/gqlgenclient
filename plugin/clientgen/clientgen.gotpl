@@ -21,7 +21,7 @@ type NetworkMiddleware = nautilusGraphql.NetworkMiddleware
 {{- end }}
 
 type Client struct {
-	querier nautilusGraphql.Queryer
+	Querier nautilusGraphql.Queryer
 }
 
 func NewClient(url string, client *http.Client, mwares ...NetworkMiddleware) {{- if .InterfaceName }} {{ .InterfaceName }} {{- else }} *Client {{- end }} {
@@ -36,9 +36,8 @@ func NewClient(url string, client *http.Client, mwares ...NetworkMiddleware) {{-
         var res struct {
             {{ $query.Name | go }} {{ $query.Type | ref }}
         }
-        err := c.querier.Query(ctx, queryInput, &res)
+        err := c.Querier.Query(ctx, queryInput, &res)
         return res.{{ $query.Name | go }}, err 
-
     }
 
 {{- end}}

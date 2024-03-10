@@ -12,16 +12,21 @@ import (
 // generateCmd represents the generate command
 var generateCmd = &cobra.Command{
 	Use: "generate",
+
 	RunE: func(cmd *cobra.Command, args []string) error {
 		generateConfig := config.FromContext(cmd.Context())
+
 		defer syscall.Unlink(generateConfig.Exec.Filename)
+
 		genetareOptions := []api.Option{}
 		if generateConfig.Client.IsDefined() {
 			clientgenPlugin := clientgen.New(&generateConfig.ExtendedConfig)
 			genetareOptions = append(genetareOptions, api.AddPlugin(clientgenPlugin))
 		}
+
 		return api.Generate(generateConfig.Config, genetareOptions...)
 	},
+
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		ctx, err := config.NewWithContext(cmd.Context())
 		if err == nil {
