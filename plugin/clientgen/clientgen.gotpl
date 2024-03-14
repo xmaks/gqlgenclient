@@ -9,35 +9,76 @@
 {{ reserveImport "time" }}
 
 {{ reserveImport "github.com/nautilus/graphql" "nautilusGraphql" }}
+{{ reserveImport "github.com/machinebox/graphql" }}
 
 type QueryInput = nautilusGraphql.QueryInput
 type NetworkMiddleware = nautilusGraphql.NetworkMiddleware
+
 {{- if .InterfaceName }}
-    type {{ .InterfaceName }} interface {
-        {{- range $query := .Queries }}
-            {{ $query.Name | go }} (context.Context, *QueryInput) ({{ $query.Type | ref }}, error)
-        {{- end }}
-    }
+
+	type {{ .InterfaceName }} interface {
+		{{- range $query := .Queries }}
+			{{ $query.Name | go }} (context.Context, *QueryInput) ({{ $query.Type | ref }}, error)
+		{{- end }}
+	}
+
 {{- end }}
 
 type Client struct {
 	Querier nautilusGraphql.Queryer
 }
 
-func NewClient(url string, client *http.Client, mwares ...NetworkMiddleware) {{- if .InterfaceName }} {{ .InterfaceName }} {{- else }} *Client {{- end }} {
+func NewClient(address string, client *http.Client, mwares ...NetworkMiddleware) {{- if .InterfaceName }} {{ .InterfaceName }} {{- else }} *Client {{- end }} {
 	return &Client{
-		nautilusGraphql.NewSingleRequestQueryer(url).WithHTTPClient(client).(*nautilusGraphql.SingleRequestQueryer).WithMiddlewares(mwares),
+		newSingleRequestQueryer(address, client, mwares...),
 	}
 }
 
 {{- range $query := .Queries }}
 
-    func (c *Client) {{ $query.Name | go }} (ctx context.Context, queryInput *QueryInput) ({{ $query.Type | ref }}, error) {
-        var res struct {
-            {{ $query.Name | go }} {{ $query.Type | ref }}
-        }
-        err := c.Querier.Query(ctx, queryInput, &res)
-        return res.{{ $query.Name | go }}, err 
-    }
+	func (c *Client) {{ $query.Name | go }} (ctx context.Context, queryInput *QueryInput) ({{ $query.Type | ref }}, error) {
+		var res struct {
+			{{ $query.Name | go }} {{ $query.Type | ref }}
+		}
+		err := c.Querier.Query(ctx, queryInput, &res)
+		return res.{{ $query.Name | go }}, err
+	}
 
 {{- end}}
+
+type singleRequestQueryer struct {
+	client *graphql.Client
+	mwares []nautilusGraphql.NetworkMiddleware
+}
+
+func newSingleRequestQueryer(address string, client *http.Client, mwares ...nautilusGraphql.NetworkMiddleware) *singleRequestQueryer {
+	return &singleRequestQueryer{
+		client: graphql.NewClient(
+			address,
+			graphql.WithHTTPClient(
+				client,
+			),
+		),
+		mwares: mwares,
+	}
+}
+
+func (q *singleRequestQueryer) Query(ctx context.Context, input *nautilusGraphql.QueryInput, receiver interface{}) error {
+	req := graphql.NewRequest(input.Query)
+	for k, v := range input.Variables {
+		req.Var(k, v)
+	}
+	if r, err := http.NewRequest("", "", nil); err != nil {
+		return err
+	} else {
+		for _, mware := range q.mwares {
+			if err := mware(r); err != nil {
+				return err
+			}
+		}
+		req.Header = r.Header
+	}
+	return q.client.Run(ctx, req, receiver)
+}
+
+var _ nautilusGraphql.Queryer = (*singleRequestQueryer)(nil)
