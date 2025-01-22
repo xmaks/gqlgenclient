@@ -113,12 +113,15 @@ func ReadConfig(cfgFile io.Reader) (*Config, error) {
 			return nil, fmt.Errorf("unable to introspect remote schema: %w", err)
 		}
 
-		f, err := os.CreateTemp("", "schema.graphql")
+		f, err := os.CreateTemp("", "*.graphql")
 		if err != nil {
 			return nil, fmt.Errorf("unable to create schema file: %w", err)
 		}
 
+		remoteSchema.Schema.Mutation.Name = "Mutation"
+
 		formatter.NewFormatter(f).FormatSchema(remoteSchema.Schema)
+		f.Close()
 		cfg.SchemaFilename = append(cfg.SchemaFilename, f.Name())
 	}
 
